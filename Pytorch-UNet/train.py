@@ -27,7 +27,7 @@ from utils.dice_score import dice_loss
 def train_model(
         model,
         device,
-        epochs: int = 5,
+        epochs: int = 100,
         batch_size: int = 1,
         learning_rate: float = 1e-5,
         val_percent: float = 0.1,
@@ -84,11 +84,14 @@ def train_model(
     ''')
 
     # 4. Set up the optimizer, the loss, the learning rate scheduler and the loss scaling for AMP
-    optimizer = optim.RMSprop(model.parameters(),
-                              lr=learning_rate, weight_decay=weight_decay, momentum=momentum, foreach=True)
+    #optimizer = optim.RMSprop(model.parameters(),
+                              #lr=learning_rate, weight_decay=weight_decay, momentum=momentum, foreach=True)
+    optimizer = optim.Adam(model.parameters(),
+                              lr=learning_rate, weight_decay=weight_decay, foreach=True)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=5)  # goal: maximize Dice score
     grad_scaler = torch.cuda.amp.GradScaler(enabled=amp)
     criterion = nn.CrossEntropyLoss() if model.n_classes > 1 else nn.BCEWithLogitsLoss()
+    # criterion = nn.CrossEntropyLoss()
     global_step = 0
 
     # 5. Begin training
@@ -169,10 +172,10 @@ def train_model(
                         except:
                             pass
 
-        if save_checkpoint:
+        if save_checkpoint and (epoch%10) == 0:
             Path(dir_checkpoint).mkdir(parents=True, exist_ok=True)
             state_dict = model.state_dict()
-            state_dict['mask_values'] = dataset.mask_values
+            state_dict['mask_values'] = train_dataset.mask_values
             torch.save(state_dict, str(dir_checkpoint / 'checkpoint_epoch{}.pth'.format(epoch)))
             logging.info(f'Checkpoint {epoch} saved!')
 
@@ -200,10 +203,10 @@ if __name__ == '__main__':
 
     dir_img = Path(args.input)
     dir_mask = Path(args.input)
+    dir_checkpoint = Path(args.input+'/checkpoints/')
     # dir_img = Path(args.input+'/images/')
     # dir_mask = Path(args.input+'/GT/')
-
-    dir_checkpoint = Path('./checkpoints/')
+    # dir_checkpoint = Path('./checkpoints/')
 
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
